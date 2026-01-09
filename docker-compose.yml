@@ -1,0 +1,94 @@
+services:
+  # บริการฐานข้อมูล MariaDB สำหรับเก็บข้อมูล Moodle
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      # รหัสผ่าน root ของฐานข้อมูล
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      # ชื่อฐานข้อมูลที่จะสร้างให้ Moodle
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      # ชื่อผู้ใช้ฐานข้อมูลสำหรับ Moodle
+      - MYSQL_USER=${MYSQL_USER}
+      # รหัสผ่านของผู้ใช้ฐานข้อมูล
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      # Character set สำหรับรองรับภาษาไทยและอักขระพิเศษ
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      # Collation สำหรับการเรียงลำดับข้อมูล
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      # เก็บข้อมูลฐานข้อมูลไว้ใน volume เพื่อไม่ให้ข้อมูลหายเมื่อ restart
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      # ตรวจสอบสถานะฐานข้อมูลว่าพร้อมใช้งาน
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # บริการ Moodle LMS
+  moodle:
+    image: bitnami/moodle:latest
+    restart: unless-stopped
+    # รอให้ MariaDB พร้อมก่อนเริ่ม Moodle
+    depends_on:
+      - mariadb
+    ports:
+      # เปิด port สำหรับเข้าถึงเว็บไซต์ Moodle (http)
+      - "${MOODLE_HTTP_PORT}:8080"
+      # เปิด port สำหรับเข้าถึงเว็บไซต์ Moodle (https)
+      - "${MOODLE_HTTPS_PORT}:8443"
+    environment:
+      # อนุญาตให้ใช้ container ที่ไม่ใช่ root (ความปลอดภัย)
+      - ALLOW_EMPTY_PASSWORD=no
+      # ชนิดของฐานข้อมูลที่ใช้
+      - MOODLE_DATABASE_TYPE=mariadb
+      # ชื่อ host ของฐานข้อมูล (ชื่อ service ใน docker-compose)
+      - MOODLE_DATABASE_HOST=mariadb
+      # Port ของฐานข้อมูล
+      - MOODLE_DATABASE_PORT_NUMBER=3306
+      # ชื่อฐานข้อมูลที่ Moodle จะใช้
+      - MOODLE_DATABASE_NAME=${MYSQL_DATABASE}
+      # ชื่อผู้ใช้สำหรับเชื่อมต่อฐานข้อมูล
+      - MOODLE_DATABASE_USER=${MYSQL_USER}
+      # รหัสผ่านสำหรับเชื่อมต่อฐานข้อมูล
+      - MOODLE_DATABASE_PASSWORD=${MYSQL_PASSWORD}
+      # ข้ามการติดตั้งเริ่มต้น (ถ้าต้องการติดตั้งเอง ให้เป็น yes)
+      - MOODLE_SKIP_BOOTSTRAP=${MOODLE_SKIP_BOOTSTRAP}
+      # ชื่อผู้ใช้ admin ของ Moodle
+      - MOODLE_USERNAME=${MOODLE_USERNAME}
+      # รหัสผ่าน admin ของ Moodle
+      - MOODLE_PASSWORD=${MOODLE_PASSWORD}
+      # อีเมล admin
+      - MOODLE_EMAIL=${MOODLE_EMAIL}
+      # ชื่อเว็บไซต์ Moodle
+      - MOODLE_SITE_NAME=${MOODLE_SITE_NAME}
+      # ภาษาเริ่มต้นของ Moodle (th = ไทย, en = อังกฤษ)
+      - MOODLE_LANG=${MOODLE_LANG}
+      # URL ที่ใช้เข้าถึง Moodle จากภายนอก
+      - MOODLE_HOST=${MOODLE_HOST}
+      # โหมด HTTPS (yes/no)
+      - MOODLE_HTTPS=${MOODLE_HTTPS}
+      # ขนาดไฟล์สูงสุดที่อัพโหลดได้ (เมกะไบต์)
+      - PHP_UPLOAD_MAX_FILESIZE=${PHP_UPLOAD_MAX_FILESIZE}
+      # ขนาดข้อมูล POST สูงสุด
+      - PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE}
+      # หน่วยความจำสูงสุดสำหรับ PHP
+      - PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT}
+    volumes:
+      # เก็บข้อมูล Moodle (ไฟล์ที่อัพโหลด, plugins, ฯลฯ)
+      - moodle_data:/bitnami/moodle
+      # เก็บข้อมูล moodledata (ไฟล์ชั่วคราว, cache, ฯลฯ)
+      - moodledata:/bitnami/moodledata
+
+# กำหนด Volumes สำหรับเก็บข้อมูลถาวร
+volumes:
+  # Volume สำหรับข้อมูลฐานข้อมูล MariaDB
+  mariadb_data:
+    driver: local
+  # Volume สำหรับไฟล์ Moodle
+  moodle_data:
+    driver: local
+  # Volume สำหรับ moodledata
+  moodledata:
+    driver: local
